@@ -468,7 +468,7 @@ body.discreto .num,body.discreto .hero-sub,body.discreto .hero-msg,body.discreto
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/lucide@0.383.0/dist/umd/lucide.min.js"></script>
+<script src="lucide.min.js"></script>
 
 <script>
 (function(){
@@ -1463,7 +1463,7 @@ if(S.bloqueado)pintarCandado();
     S.sinGuardar=true;S.bloqueado=false;$('#candado').hidden=true;render();return;
   }
   const app=firebase.initializeApp(cfg),auth=app.auth(),db=app.firestore();
-  let subs=[],fallosCod=0,esperaCod=0;
+  let subs=[],fallosCod=0,esperaCod=0,entrando=false;
   function pantallaCodigo(msg=''){
     S.bloqueado=false;$('#candado').hidden=true;
     mostrar(`<form class="candado-box" id="fCod" novalidate>
@@ -1476,16 +1476,16 @@ if(S.bloqueado)pintarCandado();
     </form>`);
     $('#cdVer').onchange=e=>{$('#cdTxt').type=e.target.checked?'text':'password'};
     $('#fCod').onsubmit=async e=>{
-      e.preventDefault();const err=$('#cdErr'),b=e.target.querySelector('[type=submit]'),codigo=$('#cdTxt').value.trim();
+      e.preventDefault();const err=$('#cdErr'),b=e.target.querySelector('[type=submit]'),codigo=$('#cdTxt').value.normalize('NFC').replace(/[\u2010-\u2015\u2212]/g,'-').replace(/\s+/g,' ').trim();
       if(esperaCod>Date.now()){err.textContent=`Demasiados intentos. Espera ${Math.ceil((esperaCod-Date.now())/1000)} segundos.`;return}
       if(!codigo){err.textContent='Escribe el código familiar.';return}
-      b.disabled=true;err.textContent='';
+      b.disabled=true;err.textContent='';entrando=true;
       try{
         if(!auth.currentUser)await auth.signInAnonymously();
         await db.doc('miembros/'+auth.currentUser.uid).set({codigo,creado:new Date().toISOString()});
-        fallosCod=0;conectar(auth.currentUser);
+        fallosCod=0;entrando=false;conectar(auth.currentUser);
       }catch(er){
-        b.disabled=false;
+        entrando=false;b.disabled=false;
         if(er&&er.code==='permission-denied'){fallosCod++;if(fallosCod>=5){esperaCod=Date.now()+60000;fallosCod=0}err.textContent='Ese código no es correcto.'}
         else if(er&&er.code==='auth/operation-not-allowed')err.textContent='Falta activar el acceso anónimo en Firebase (ver LEEME.md).';
         else err.textContent='Sin conexión. Revisa tu internet e inténtalo de nuevo.';
@@ -1493,7 +1493,7 @@ if(S.bloqueado)pintarCandado();
     };
     const i=$('#cdTxt');if(i)i.focus();
   }
-  S.cerrarSesion=async()=>{const u=auth.currentUser;try{if(u&&u.isAnonymous){await u.delete();return}}catch(_){}try{await auth.signOut()}catch(_){}};
+  S.cerrarSesion=async()=>{const u=auth.currentUser;try{if(u&&u.isAnonymous)await u.delete()}catch(_){}try{await auth.signOut()}catch(_){}};
   function limpiar(){subs.forEach(f=>{try{f()}catch(_){}});subs=[];S.db=null;S.uid=null;
     for(const p of Object.keys(PERF)){S.cfg[p]=null;S.movs[p]=[]}S.notas=[];S.fondos=[];S.apf=[];S.perfiles={};S.actividad=[];render()}
   function conectar(u){
@@ -1520,6 +1520,7 @@ if(S.bloqueado)pintarCandado();
     render();
   }
   auth.onAuthStateChanged(async u=>{
+    if(entrando)return;
     limpiar();
     if(!u){pantallaCodigo();return}
     try{const m=await db.doc('miembros/'+u.uid).get();if(m.exists){conectar(u);return}}catch(_){}
