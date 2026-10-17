@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Un teléfono es "de la familia" si ya escribió el código familiar correcto.
+    function esFamilia() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/miembros/$(request.auth.uid));
+    }
+
+    // El código familiar vive aquí. Nadie lo puede leer desde la app:
+    // solo lo creas o cambias tú en la consola de Firebase.
+    match /config/acceso {
+      allow read, write: if false;
+    }
+
+    // Registro de cada teléfono conectado. Solo se crea con el código correcto.
+    match /miembros/{uid} {
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.codigo == get(/databases/$(database)/documents/config/acceso).data.codigo;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow update, delete: if false;
+    }
+
+    // Datos de la familia: solo teléfonos conectados con el código.
+    match /finanzas/{documento=**} {
+      allow read, write: if esFamilia();
+    }
+    match /perfiles/{documento=**} {
+      allow read, write: if esFamilia();
+    }
+
+    // PIN de cada teléfono: solo ese teléfono lo puede ver o cambiar.
+    match /data/users/{uid}/{documento=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Todo lo demás está cerrado.
+  }
+}
