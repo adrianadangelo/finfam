@@ -665,7 +665,7 @@ function render(){
 function ajustarTa(t){t.style.height='auto';t.style.height=Math.min(140,t.scrollHeight)+'px'}
 function avisosHTML(){
   let h='';
-  if(S.sinPermiso)h+=`<div class="aviso">${ic('circle-alert')}<span>Este teléfono ya no tiene acceso a FinFam. Desconéctalo desde el escudo y vuelve a escribir el código familiar.</span></div>`;
+  if(S.sinPermiso)h+=`<div class="aviso">${ic('circle-alert')}<span>Este teléfono perdió el acceso a FinFam y lo que registres no se guardará. <button type="button" class="btn-link" data-acc="reconectar">Volver a escribir el código</button></span></div>`;
   if(S.sinGuardar)h+=`<div class="aviso">${ic('circle-alert')}<span>Sin conexión con la base de datos. Revisa tu internet o vuelve a iniciar sesión.</span></div>`;
   else if(S.soloLectura)h+=`<div class="aviso">${ic('circle-alert')}<span>Puedes ver la información, pero no tienes permiso para registrar movimientos.</span></div>`;
   if(!S.tasa)h+=`<div class="aviso">${ic('landmark')}<span>Escribe la tasa BCV del día arriba para convertir lo que pagas o recibes en bolívares.</span></div>`;
@@ -867,20 +867,24 @@ function errTxt(e){const c=e&&e.code;
   if(c==='invalid_argument'||c==='permission-denied')return'No tienes permiso para guardar esto.';
   if(c==='resource_exhausted')return'Demasiados cambios seguidos. Espera unos segundos.';
   return'No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.'}
+const SIN_DB='No hay conexión con FinFam y no se guardó. Revisa tu internet o vuelve a escribir el código.';
+function conTiempo(pr,ms=15000){return Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}),ms))])}
+function trasError(e){if(e&&e.code==='permission-denied'){S.sinPermiso=true;render()}
+  if(e&&e.code==='timeout')return'El servidor no respondió y puede que no se haya guardado. Revisa tu internet y recarga la app.';return errTxt(e)}
 async function addMov(p,data){
   const d={...data,creado:new Date().toISOString()};
-  if(!S.db){S.movs[p]=[...S.movs[p],{id:uid(),...d}];render();return true}
-  try{await S.db.doc('finanzas/'+p).collection('movs').add(d);registrar(`Registró ${d.tipo==='ingreso'?'un ingreso':d.tipo==='ahorro'?'un ahorro':'un gasto'} de ${fmt(d.usd)} en ${PERF[p]}`);return true}
-  catch(e){toast(errTxt(e));render();return false}
+  if(!S.db){toast(SIN_DB);return false}
+  try{await conTiempo(S.db.doc('finanzas/'+p).collection('movs').add(d));registrar(`Registró ${d.tipo==='ingreso'?'un ingreso':d.tipo==='ahorro'?'un ahorro':'un gasto'} de ${fmt(d.usd)} en ${PERF[p]}`);return true}
+  catch(e){toast(trasError(e));render();return false}
 }
 async function delMov(p,id){
-  if(!S.db){S.movs[p]=S.movs[p].filter(x=>x.id!==id);render();return}
+  if(!S.db){toast(SIN_DB);return}
   const mv=S.movs[p].find(x=>x.id===id);
-  try{await S.db.doc('finanzas/'+p).collection('movs').doc(id).delete();registrar(`Borró un movimiento${mv?' de '+fmt(mv.usd):''} en ${PERF[p]}`)}catch(e){toast(errTxt(e))}
+  try{await conTiempo(S.db.doc('finanzas/'+p).collection('movs').doc(id).delete());registrar(`Borró un movimiento${mv?' de '+fmt(mv.usd):''} en ${PERF[p]}`)}catch(e){toast(trasError(e))}
 }
 async function saveCfg(p,cfg){
-  if(!S.db){S.cfg[p]=cfg;render();return true}
-  try{await S.db.doc('finanzas/'+p).set(cfg);registrar(`Cambió los pagos fijos de ${PERF[p]}`);return true}catch(e){toast(errTxt(e));return false}
+  if(!S.db){toast(SIN_DB);return false}
+  try{await conTiempo(S.db.doc('finanzas/'+p).set(cfg));registrar(`Cambió los pagos fijos de ${PERF[p]}`);return true}catch(e){toast(trasError(e));return false}
 }
 let tasaTimer=null;
 function setTasa(v){
@@ -976,16 +980,16 @@ function tiempo(isoTxt){
   return d.toLocaleDateString('es',{day:'numeric',month:'short'})+', '+d.toLocaleTimeString('es',{hour:'numeric',minute:'2-digit'});
 }
 async function dbAdd(col,data){
-  if(!S.db){toast('Esta vista no puede guardar datos.');return null}
-  try{const r=S.db.collection(col).doc();await r.set(data);return r.id}catch(e){toast(errTxt(e));return null}
+  if(!S.db){toast(SIN_DB);return null}
+  try{const r=S.db.collection(col).doc();await conTiempo(r.set(data));return r.id}catch(e){toast(trasError(e));return null}
 }
 async function dbUpd(path,data){
-  if(!S.db){toast('Esta vista no puede guardar datos.');return false}
-  try{await S.db.doc(path).update(data);return true}catch(e){toast(errTxt(e));return false}
+  if(!S.db){toast(SIN_DB);return false}
+  try{await conTiempo(S.db.doc(path).update(data));return true}catch(e){toast(trasError(e));return false}
 }
 async function dbDel(path){
-  if(!S.db){toast('Esta vista no puede guardar datos.');return false}
-  try{await S.db.doc(path).delete();return true}catch(e){toast(errTxt(e));return false}
+  if(!S.db){toast(SIN_DB);return false}
+  try{await conTiempo(S.db.doc(path).delete());return true}catch(e){toast(trasError(e));return false}
 }
 const nota=(texto,autor)=>dbAdd('finanzas/comun/notas',{texto,autor:autor||S.yo,fecha:new Date().toISOString()});
 
@@ -1186,7 +1190,7 @@ function formPerfil(q){
       try{st.foto=await reducirFoto(fl);pintar()}catch(_){$('#pfErr').textContent='No se pudo leer esa imagen. Prueba con una foto JPG o PNG.'}};
     const g=hoja.querySelector('[data-pf="guardar"]');g.onclick=async()=>{
       if(st.tipo==='foto'&&!st.foto){$('#pfErr').textContent='Sube una foto primero, o elige un dibujo.';return}
-      if(!S.db){toast('Esta vista no puede guardar datos.');return}
+      if(!S.db){toast(SIN_DB);return}
       g.disabled=true;
       try{await S.db.doc('perfiles/'+q).set({tipo:st.tipo,dibujo:st.dibujo,color:st.color,foto:st.tipo==='foto'?st.foto:null,actualizado:new Date().toISOString()});registrar(`Cambió la imagen de ${nombre}`);cerrar();toast('Perfil actualizado.')}
       catch(e){g.disabled=false;$('#pfErr').textContent=errTxt(e)}
@@ -1281,6 +1285,7 @@ app.addEventListener('input',e=>{if(e.target.id==='notaTxt'){S.borrador=e.target
 app.addEventListener('keydown',e=>{if(e.target.id==='notaTxt'&&e.key==='Enter'&&!e.shiftKey){e.preventDefault();enviarNota(e.target.form)}});
 app.addEventListener('click',async e=>{
   const b=e.target.closest('[data-acc]');if(!b)return;const a=b.dataset.acc,p=S.vista;
+  if(a==='reconectar'){if(S.cerrarSesion){S.sinPermiso=false;await S.cerrarSesion()}return}
   if(a==='mes'){const d=+b.dataset.d;[S.y,S.m]=d>0?sigMes(S.y,S.m):antMes(S.y,S.m);render();return}
   if(S.soloLectura&&a!=='mes'){toast('No tienes permiso para registrar cambios.');return}
   if(a==='nuevo')formMov(b.dataset.tipo);
