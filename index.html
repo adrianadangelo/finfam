@@ -1463,6 +1463,8 @@ if(S.bloqueado)pintarCandado();
     S.sinGuardar=true;S.bloqueado=false;$('#candado').hidden=true;render();return;
   }
   const app=firebase.initializeApp(cfg),auth=app.auth(),db=app.firestore();
+  try{db.settings({experimentalForceLongPolling:true,merge:true})}catch(_){}
+  const listoAuth=auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch(()=>{}));
   let subs=[],fallosCod=0,esperaCod=0,entrando=false;
   function pantallaCodigo(msg=''){
     S.bloqueado=false;$('#candado').hidden=true;
@@ -1481,8 +1483,12 @@ if(S.bloqueado)pintarCandado();
       if(!codigo){err.textContent='Escribe el código familiar.';return}
       b.disabled=true;err.textContent='';entrando=true;
       try{
+        await listoAuth;
         if(!auth.currentUser)await auth.signInAnonymously();
-        await db.doc('miembros/'+auth.currentUser.uid).set({codigo,creado:new Date().toISOString()});
+        await auth.currentUser.getIdToken(true);
+        let ok=false,ultimo=null;
+        for(let i=0;i<3&&!ok;i++){try{await db.doc('miembros/'+auth.currentUser.uid).set({codigo,creado:new Date().toISOString()});ok=true}catch(x){ultimo=x;if(x&&x.code==='permission-denied'&&i<2){await new Promise(r=>setTimeout(r,800));await auth.currentUser.getIdToken(true)}else break}}
+        if(!ok)throw ultimo;
         fallosCod=0;entrando=false;conectar(auth.currentUser);
       }catch(er){
         entrando=false;b.disabled=false;
@@ -1497,6 +1503,7 @@ if(S.bloqueado)pintarCandado();
   function limpiar(){subs.forEach(f=>{try{f()}catch(_){}});subs=[];S.db=null;S.uid=null;
     for(const p of Object.keys(PERF)){S.cfg[p]=null;S.movs[p]=[]}S.notas=[];S.fondos=[];S.apf=[];S.perfiles={};S.actividad=[];render()}
   function conectar(u){
+    conectadoUid=u.uid;
     lg.hidden=true;lg.innerHTML='';
     S.db=db;S.uid=u.uid;S.email='';S.sinGuardar=false;S.sinPermiso=false;
     const fallo=e=>{if(e&&e.code==='permission-denied'){S.sinPermiso=true;render()}};
@@ -1519,11 +1526,16 @@ if(S.bloqueado)pintarCandado();
     on(db.collection('perfiles'),s=>{const o={};s.docs.forEach(d=>{o[d.id]=d.data()});S.perfiles=o;render()});
     render();
   }
+  let conectadoUid=null;
   auth.onAuthStateChanged(async u=>{
     if(entrando)return;
-    limpiar();
+    if(u&&u.uid===conectadoUid)return;
+    limpiar();conectadoUid=null;
     if(!u){pantallaCodigo();return}
-    try{const m=await db.doc('miembros/'+u.uid).get();if(m.exists){conectar(u);return}}catch(_){}
+    for(let i=0;i<3;i++){
+      try{await u.getIdToken();const m=await db.doc('miembros/'+u.uid).get();if(m.exists){conectar(u);return}break}
+      catch(_){await new Promise(r=>setTimeout(r,700))}
+    }
     pantallaCodigo();
   });
 })();
