@@ -451,6 +451,10 @@ body.discreto .num,body.discreto .hero-sub,body.discreto .hero-msg,body.discreto
 .comp-lista .mov{grid-template-columns:2.2rem 1fr auto;padding:.6rem 0}
 .comp-lista .mov:first-child{border-top:0}
 body.discreto .comp-p small{filter:blur(7px)}
+.chip-fam{background:var(--bs-soft);color:var(--bs);display:inline-flex;align-items:center;gap:.2rem}
+.chip-fam .ico{width:.8rem;height:.8rem}
+.chk-fam{font-size:.85rem;margin:0;color:var(--muted)}
+.tabla .chk-fam input{width:1.1rem;height:1.1rem;padding:0;flex:none;margin-top:.1rem}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -692,16 +696,17 @@ function resumenHTML(p){
   const T=totales(p),mes=nomMes(S.y,S.m);
   if(p==='comun'){
     const ap=q=>sum(T.mm.filter(x=>x.tipo==='ingreso'&&x.quien===q),'usd');
-    const pg=q=>sum(T.mm.filter(x=>x.tipo==='gasto'&&x.quien===q),'usd');
+    const cg=S.compartidos.filter(x=>x.mes===ymStr()&&x.tipo==='gasto'),gasComp=sum(cg,'usd'),gasTot=T.gas+gasComp;
+    const pg=q=>sum(T.mm.filter(x=>x.tipo==='gasto'&&x.quien===q),'usd')+sum(cg.filter(x=>x.quien===q),'usd');
     const mio=S.yo?totales(S.yo):{ing:0,aho:0};
     const usoPct=T.ing?T.gas/T.ing*100:0,queda=T.ing-T.gas;
     const enFondos=sum(S.apf.filter(x=>(x.fecha||'').slice(0,7)===ymStr()),'usd'),totFondos=sum(S.apf,'usd');
     const aportaron=MIEMBROS.filter(q=>ap(q)>0||pg(q)>0);
     return mesNav()+`<div class="hero">
-      <div class="hero-top"><div><span class="hero-lbl">${ic('home')} Gastos comunes de ${mes}</span><div class="hero-num num">${fmt(T.gas)}</div><span class="hero-sub">de ${fmt(T.ing)} aportados al fondo familiar</span></div>${ring(usoPct,Math.round(usoPct)+'%')}</div>
+      <div class="hero-top"><div><span class="hero-lbl">${ic('home')} Gastos comunes de ${mes}</span><div class="hero-num num">${fmt(gasTot)}</div><span class="hero-sub">${gasComp?`${fmt(T.gas)} del fondo familiar y ${fmt(gasComp)} pagados por cada uno`:`de ${fmt(T.ing)} aportados al fondo familiar`}</span></div>${ring(usoPct,Math.round(usoPct)+'%')}</div>
       <div class="tiles">
         <div class="tile">${ic('arrow-down-left')}<small>Aportado</small><b class="num">${fmt(T.ing)}</b></div>
-        <div class="tile">${ic('arrow-up-right')}<small>Gastado</small><b class="num">${fmt(T.gas)}</b></div>
+        <div class="tile">${ic('arrow-up-right')}<small>Gastado del fondo</small><b class="num">${fmt(T.gas)}</b></div>
         <div class="tile ${queda<0?'neg':''}">${ic('wallet')}<small>Queda</small><b class="num">${fmt(queda)}</b></div>
       </div>
       ${aportaron.length?`<p class="hero-msg">${aportaron.map(q=>`${PERF[q]} aportó ${fmt(ap(q))} y pagó ${fmt(pg(q))}`).join('. ')}.</p>`:''}</div>
@@ -773,7 +778,7 @@ function historialHTML(p){
   return h;
 }
 function donutHTML(p){
-  const g=totales(p).mm.filter(x=>x.tipo==='gasto'),total=sum(g,'usd'),mes=nomMes(S.y,S.m);
+  const g=[...totales(p).mm.filter(x=>x.tipo==='gasto'),...(p==='comun'?S.compartidos.filter(x=>x.mes===ymStr()&&x.tipo==='gasto'):[])],total=sum(g,'usd'),mes=nomMes(S.y,S.m);
   let h=`<section>${titulo('pie-chart',p==='comun'?'Gastos comunes por categoría':'Gastos por categoría')}`;
   if(!total)return h+vacio('pie-chart','Cuando registres gastos, aquí verás en qué se va tu dinero este mes.')+`</section>`;
   const por={};g.forEach(x=>{const c=x.categoria||'Otros';por[c]=(por[c]||0)+num(x.usd)});
@@ -845,7 +850,7 @@ function itemHTML(p,o,P){
   }
   return `<li class="item ${cls}"><div class="dia">${nomMes(d.getFullYear(),d.getMonth()+1,'short').replace('.','')}<b>${d.getDate()}</b></div>
     ${badge(it.tipo==='ahorro'?'Ahorro':it.categoria)}
-    <div class="item-mid"><div class="item-nom">${esc(it.nombre)}</div><div class="item-sub"><span>${TIPOS[it.tipo]||''}</span>${it.tipo==='ahorro'?'<span class="chip chip-usd">$</span>':chip}</div></div>
+    <div class="item-mid"><div class="item-nom">${esc(it.nombre)}</div><div class="item-sub"><span>${TIPOS[it.tipo]||''}</span>${it.compartir?`<span class="chip chip-fam">${ic('users')}Familia</span>`:''}${it.tipo==='ahorro'?'<span class="chip chip-usd">$</span>':chip}</div></div>
     <div class="item-der">${der}</div></li>`;
 }
 function sobresHTML(p){
@@ -974,7 +979,7 @@ function pagar(btn){
       bs:con==='Bs'&&S.tasa?r2(num(it.usd)*S.tasa):null,tasa:con==='Bs'?S.tasa:null,
       categoria:it.tipo==='ahorro'?it.nombre:(it.categoria||'Otros'),nota:it.tipo==='ahorro'?'':it.nombre,planId:it.id,ocurrencia:fe};
     if(quien)data.quien=quien;
-    if(await addMov(p,data)){cerrar();toast(it.tipo==='ahorro'?'Ahorro apartado.':'Pago registrado.')}
+    const nid=await addMov(p,data);if(nid){if(it.compartir&&p===S.yo&&typeof nid==='string')await compartirMov(nid,data,true);cerrar();toast(it.tipo==='ahorro'?'Ahorro apartado.':it.compartir&&p===S.yo?'Pago registrado y reflejado en Finanzas Familia.':'Pago registrado.')}
   };
   if(p==='comun'){
     abrir(`${cabecera('¿Quién pagó?')}<p class="ayuda" style="margin-top:0">${esc(it.nombre)}, ${fmt(it.usd)}</p><div class="quien">${MIEMBROS.map(q=>`<button class="btn" data-q="${q}">${PERF[q]}</button>`).join('')}</div>`);
@@ -1281,6 +1286,7 @@ function pintarConfig(){
     <div><span class="mini-lbl">Tipo</span><select data-j="${i}" data-k="tipo">${sel(x.tipo,[['fijo','Pago fijo'],['ahorro','Ahorro'],['sobre','Presupuesto']])}</select></div>
     <div><span class="mini-lbl">Pagar con</span><select data-j="${i}" data-k="moneda">${sel(x.moneda,[['Cualquiera','Lo que haya'],['Bs','Bolívares'],['USD','Dólares']])}</select></div>
     <div><span class="mini-lbl">Categoría</span><select data-j="${i}" data-k="categoria">${sel(x.categoria,[['Ahorro','Ahorro'],...CATS.map(c=>[c,c])])}</select></div>
+    ${S.vista!=='comun'?`<label class="check full chk-fam"><input type="checkbox" data-j="${i}" data-k="compartir" ${x.compartir?'checked':''}> Reflejar en Finanzas Familia cuando lo pague</label>`:''}
     <button type="button" class="btn-del" data-del-plan="${i}" aria-label="Quitar pago">×</button></div>`).join('');
   abrir(`${cabecera('Fechas de cobro y pagos fijos')}
     <p class="ayuda" style="margin-top:0">Vista de ${PERF[p]}. Escribe los montos en su equivalente en dólares. En días puedes poner un número del mes, varios separados por coma, “último”, o un día de la semana como “lunes” para algo semanal.</p>
@@ -1294,7 +1300,7 @@ function pintarConfig(){
     <div class="err" id="cErr"></div>
     <div class="hoja-pie"><button type="button" class="btn" data-h="cerrar">Cancelar</button><button type="button" class="btn btn-usd" data-h="guardarCfg">Guardar cambios</button></div>`);
   hoja.querySelectorAll('[data-i]').forEach(el=>el.oninput=el.onchange=()=>{ED.ingresos[+el.dataset.i][el.dataset.k]=el.value});
-  hoja.querySelectorAll('[data-j]').forEach(el=>el.oninput=el.onchange=()=>{ED.plan[+el.dataset.j][el.dataset.k]=el.value});
+  hoja.querySelectorAll('[data-j]').forEach(el=>el.oninput=el.onchange=()=>{ED.plan[+el.dataset.j][el.dataset.k]=el.type==='checkbox'?el.checked:el.value});
   const m=$('#cMeta');if(m)m.oninput=()=>{ED.ahorroMetaPct=m.value};
   hoja.querySelectorAll('[data-del-ing]').forEach(b=>b.onclick=()=>{ED.ingresos.splice(+b.dataset.delIng,1);pintarConfig()});
   hoja.querySelectorAll('[data-del-plan]').forEach(b=>b.onclick=()=>{ED.plan.splice(+b.dataset.delPlan,1);pintarConfig()});
@@ -1315,7 +1321,7 @@ async function guardarCfg(){
     if(sensible(nom)){err.textContent=MSG_SENS;return}
     const d=parseDias(x.diasTxt);if(!d){err.textContent=`Revisa los días de “${nom}”: usa números del 1 al 31 o “último”.`;return}
     const u=num(x.usd);if(u<=0){err.textContent=`“${nom}” necesita un monto mayor que cero.`;return}
-    plan.push({id:x.id||uid(),nombre:nom,usd:r2(u),dias:d,tipo:['fijo','ahorro','sobre'].includes(x.tipo)?x.tipo:'fijo',moneda:['Bs','USD','Cualquiera'].includes(x.moneda)?x.moneda:'Cualquiera',categoria:x.categoria||'Otros'})}
+    plan.push({compartir:!!x.compartir&&S.vista!=='comun',id:x.id||uid(),nombre:nom,usd:r2(u),dias:d,tipo:['fijo','ahorro','sobre'].includes(x.tipo)?x.tipo:'fijo',moneda:['Bs','USD','Cualquiera'].includes(x.moneda)?x.moneda:'Cualquiera',categoria:x.categoria||'Otros'})}
   const meta=Math.min(100,Math.max(0,num(ED.ahorroMetaPct)||20));
   if(await saveCfg(S.vista,{ahorroMetaPct:meta,ingresos,plan})){cerrar();toast('Cambios guardados.')}
 }
