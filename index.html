@@ -62,7 +62,8 @@ button,input,select{font:inherit;color:inherit}
 .tasa input{width:7rem;padding:.35rem .55rem;border:0;border-radius:4px;background:rgba(255,255,255,.2);color:var(--brand-ink)}
 .tasa input::placeholder{color:rgba(255,255,255,.75)}
 .tasa input:focus-visible{outline-color:#fff}
-.tabs{display:grid;grid-template-columns:repeat(4,1fr) 1.3fr;margin-top:.5rem}
+.tabs{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;margin-top:.5rem}
+.tab[hidden]{display:none}
 .tabs .tab{font-size:.78rem;padding-left:.15rem;padding-right:.15rem}
 .tab{display:flex;flex-direction:column;align-items:center;gap:.15rem;font-size:.85rem;border:0;background:transparent;padding:.6rem .4rem .55rem;line-height:1.2;cursor:pointer;font-weight:500;color:rgba(255,255,255,.75);border-bottom:3px solid transparent}
 .tab[aria-selected="true"]{color:#fff;border-bottom-color:var(--accent)}
@@ -167,7 +168,7 @@ section>h2 .ico{color:var(--brand);width:1.3rem;height:1.3rem}
 .sobre .barra em{position:absolute;left:.5rem;top:50%;transform:translateY(-50%);font-style:normal;font-size:.74rem;font-weight:500;color:var(--ink);white-space:nowrap}
 .sobre small.ayuda{display:block}
 .movs{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:14px;box-shadow:var(--shadow)}
-.mov{display:grid;grid-template-columns:2.2rem 1fr auto auto;gap:.5rem;align-items:center;padding:.65rem 1rem;border-top:1px solid var(--line)}
+.mov{display:grid;grid-template-columns:2.2rem 1fr auto auto auto;gap:.5rem;align-items:center;padding:.65rem 1rem;border-top:1px solid var(--line)}
 .mov:first-child{border-top:0}
 .mov-cat{font-weight:400;display:block;line-height:1.3}
 .mov-sub{font-size:.8rem;color:var(--muted)}
@@ -439,6 +440,17 @@ body.discreto .num,body.discreto .hero-sub,body.discreto .hero-msg,body.discreto
 .consejos{margin:.2rem 0 0;padding-left:1.1rem;font-size:.88rem;color:var(--muted)}
 .consejos li{margin-bottom:.35rem}
 @media (max-width:420px){.top-row .tasa input{width:5.6rem}}
+.btn-share{background:none;border:0;color:var(--muted);cursor:pointer;padding:.25rem;border-radius:50%;width:2rem;height:2rem;display:grid;place-items:center}
+.btn-share .ico{width:1.05rem;height:1.05rem}
+.btn-share.on{background:var(--usd-soft);color:var(--brand)}
+.comp-resumen{display:grid;gap:.5rem;margin-bottom:.6rem}
+.comp-p{display:flex;align-items:center;gap:.6rem;background:var(--surface2);border-radius:12px;padding:.5rem .6rem}
+.comp-p b{display:block;line-height:1.2}
+.comp-p small{color:var(--muted);font-size:.82rem}
+.comp-lista{list-style:none;margin:0;padding:0}
+.comp-lista .mov{grid-template-columns:2.2rem 1fr auto;padding:.6rem 0}
+.comp-lista .mov:first-child{border-top:0}
+body.discreto .comp-p small{filter:blur(7px)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -494,7 +506,7 @@ const ahora=new Date();
 const S={vista:'adriana',y:ahora.getFullYear(),m:ahora.getMonth()+1,tasa:null,
   cfg:{adriana:null,janio:null,vicky:null,sebas:null,comun:null},movs:{adriana:[],janio:[],vicky:[],sebas:[],comun:[]},
   db:null,sinGuardar:false,soloLectura:false,abiertos:new Set(),abiertosKey:'',
-  yo:null,notas:[],fondos:[],apf:[],histAb:new Set(),borrador:'',perfiles:{}};
+  yo:null,notas:[],fondos:[],apf:[],compartidos:[],histAb:new Set(),borrador:'',perfiles:{}};
 
 function getCfg(p){const c=S.cfg[p]||{};return{ahorroMetaPct:c.ahorroMetaPct??20,ingresos:Array.isArray(c.ingresos)?c.ingresos:[],plan:Array.isArray(c.plan)?c.plan:[]}}
 const diasMes=(y,m)=>new Date(y,m,0).getDate();
@@ -650,13 +662,15 @@ function escenaHTML(p){
 }
 function render(){
   if(S.bloqueado){$('#app').innerHTML='';return}
-  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.vista===S.vista)));
+  const permitidas=S.yo?[S.yo,'comun']:['comun'];
+  if(!permitidas.includes(S.vista))S.vista=permitidas[0];
+  document.querySelectorAll('.tab').forEach(b=>{b.hidden=!permitidas.includes(b.dataset.vista);b.setAttribute('aria-selected',String(b.dataset.vista===S.vista))});
   const t=$('#tasa');if(document.activeElement!==t)t.value=S.tasa??'';
   const p=S.vista,key=p+ymStr();
   const ps=calcPeriodos(p);
   if(S.abiertosKey!==key){S.abiertosKey=key;S.abiertos=new Set();const h=ps.find(x=>x.contieneHoy)||ps[0];if(h)S.abiertos.add(h.inicio)}
   const ae=document.activeElement,foco=!!(ae&&ae.id==='notaTxt');
-  $('#app').innerHTML=avisosHTML()+escenaHTML(p)+resumenHTML(p)+accionesHTML(p)+(p==='comun'?fondosHTML()+notasHTML():'')+proximoHTML(p)+historialHTML(p)+donutHTML(p)+periodosHTML(p,ps)+sobresHTML(p)+movsHTML(p)+
+  $('#app').innerHTML=avisosHTML()+escenaHTML(p)+resumenHTML(p)+accionesHTML(p)+(p==='comun'?fondosHTML()+compartidosHTML()+notasHTML():'')+proximoHTML(p)+historialHTML(p)+donutHTML(p)+periodosHTML(p,ps)+sobresHTML(p)+movsHTML(p)+
     `<section><button class="btn btn-config" data-acc="config">${ic('settings-2')}<span>Editar fechas de cobro y pagos fijos</span></button></section>`;
   pintarTabs();
   iconos();
@@ -679,8 +693,9 @@ function resumenHTML(p){
   if(p==='comun'){
     const ap=q=>sum(T.mm.filter(x=>x.tipo==='ingreso'&&x.quien===q),'usd');
     const pg=q=>sum(T.mm.filter(x=>x.tipo==='gasto'&&x.quien===q),'usd');
-    const tot=Object.fromEntries(MIEMBROS.map(q=>[q,totales(q)]));
-    const ingH=sum(Object.values(tot),'ing'),ahoH=sum(Object.values(tot),'aho'),usoPct=T.ing?T.gas/T.ing*100:0,queda=T.ing-T.gas;
+    const mio=S.yo?totales(S.yo):{ing:0,aho:0};
+    const usoPct=T.ing?T.gas/T.ing*100:0,queda=T.ing-T.gas;
+    const enFondos=sum(S.apf.filter(x=>(x.fecha||'').slice(0,7)===ymStr()),'usd'),totFondos=sum(S.apf,'usd');
     const aportaron=MIEMBROS.filter(q=>ap(q)>0||pg(q)>0);
     return mesNav()+`<div class="hero">
       <div class="hero-top"><div><span class="hero-lbl">${ic('home')} Gastos comunes de ${mes}</span><div class="hero-num num">${fmt(T.gas)}</div><span class="hero-sub">de ${fmt(T.ing)} aportados al fondo familiar</span></div>${ring(usoPct,Math.round(usoPct)+'%')}</div>
@@ -690,11 +705,12 @@ function resumenHTML(p){
         <div class="tile ${queda<0?'neg':''}">${ic('wallet')}<small>Queda</small><b class="num">${fmt(queda)}</b></div>
       </div>
       ${aportaron.length?`<p class="hero-msg">${aportaron.map(q=>`${PERF[q]} aportó ${fmt(ap(q))} y pagó ${fmt(pg(q))}`).join('. ')}.</p>`:''}</div>
-    <div class="panel"><div class="panel-tit">${ic('heart-handshake')} El hogar completo este mes</div>
+    <div class="panel"><div class="panel-tit">${ic('heart-handshake')} Ahorro en familia</div>
       <div class="hogar">
-        <div>${badge('','arrow-down-left','#5B46D6')}<span><small>Ingresos de la familia</small><b class="num">${fmt(ingH)}</b></span></div>
-        <div>${badge('Ahorro')}<span><small>Ahorrado en familia</small><b class="num">${fmt(ahoH)}${ingH?` <em>${Math.round(ahoH/ingH*100)}%</em>`:''}</b></span></div>
-        ${MIEMBROS.map(q=>`<div>${avatar(q)}<span><small>${PERF[q]} ahorró</small><b class="num">${fmt(tot[q].aho)}</b></span></div>`).join('')}
+        <div>${badge('Ahorro')}<span><small>Aportado a fondos este mes</small><b class="num">${fmt(enFondos)}</b></span></div>
+        <div>${badge('','piggy-bank','#5B46D6')}<span><small>Total en fondos</small><b class="num">${fmt(totFondos)}</b></span></div>
+        <div>${avatar(S.yo||'')}<span><small>Tú ahorraste este mes</small><b class="num">${fmt(mio.aho)}</b></span></div>
+        <div>${badge('','lock-keyhole','#6D6890')}<span><small>Lo de cada perfil</small><b>Es privado</b></span></div>
       </div></div>`;
   }
   const cfg=getCfg(p),metaPct=num(cfg.ahorroMetaPct)||20;
@@ -732,9 +748,9 @@ function pasoBonito(x){if(x<=0)return 1;const pw=Math.pow(10,Math.floor(Math.log
 const fmtCorto=n=>n>=1000?'$'+(Math.round(n/100)/10).toLocaleString('es-VE')+'k':'$'+Math.round(n);
 function historialHTML(p){
   const meses=[];let y=S.y,m=S.m;for(let i=0;i<6;i++){meses.unshift([y,m]);[y,m]=antMes(y,m)}
-  const datos=meses.map(([y,m])=>{const t=totalesMes(p,y,m);if(p==='comun'){t.aho=MIEMBROS.reduce((acc,q)=>acc+totalesMes(q,y,m).aho,0)}return{y,m,...t}});
+  const datos=meses.map(([y,m])=>{const t=totalesMes(p,y,m);if(p==='comun'){t.aho=sum(S.apf.filter(x=>x.mes===y+'-'+pad(m)),'usd')}return{y,m,...t}});
   const max=Math.max(0,...datos.map(d=>Math.max(d.ing,d.gas,d.aho)));
-  const tit=p==='comun'?'Aportes, gastos y ahorro del hogar':'Ingresos, gastos y ahorro';
+  const tit=p==='comun'?'Aportes, gastos y ahorro en fondos':'Ingresos, gastos y ahorro';
   let h=`<section>${titulo('bar-chart-3',tit)}`;
   if(!max)return h+vacio('bar-chart-3','Cuando registres cobros y gastos, aquí verás cómo evolucionan mes a mes.')+`</section>`;
   const W=380,H=210,pl=42,pr=6,pt=10,pb=26,ch=H-pt-pb,cw=(W-pl-pr)/6,bw=Math.min(14,(cw-10)/3);
@@ -856,7 +872,7 @@ function movsHTML(p){
     const sub=[fecha(x.fecha).toLocaleDateString('es',{day:'numeric',month:'short'}),x.nota?esc(x.nota):'',p==='comun'&&x.quien?(x.tipo==='ingreso'?'de ':'pagó ')+PERF[x.quien]:''].filter(Boolean).join(', ');
     return `<li class="mov mov-${x.tipo}">${b}<div><span class="mov-cat">${esc(titulo)}</span><span class="mov-sub">${sub}</span></div>
       <div class="mov-der"><span class="num">${signo}${fmt(x.usd)}</span>${x.moneda==='Bs'?`<span class="chip chip-bs">${x.bs?fmtBs(x.bs):'Bs'}</span>`:'<span class="chip chip-usd">$</span>'}</div>
-      <button class="btn-del" data-acc="borrar" data-id="${x.id}" aria-label="Borrar movimiento">${ic('trash-2')}</button></li>`;
+      ${p!=='comun'?`<button class="btn-share ${x.compartido?'on':''}" data-acc="compartir" data-id="${x.id}" aria-pressed="${!!x.compartido}" aria-label="${x.compartido?'Dejar de mostrar en Finanzas Familia':'Mostrar en Finanzas Familia'}" title="${x.compartido?'Se ve en Finanzas Familia':'Mostrar en Finanzas Familia'}">${ic('users')}</button>`:''}<button class="btn-del" data-acc="borrar" data-id="${x.id}" aria-label="Borrar movimiento">${ic('trash-2')}</button></li>`;
   }).join('')+`</ul>`;
   return h+`</section>`;
 }
@@ -874,17 +890,18 @@ function trasError(e){if(e&&e.code==='permission-denied'){S.sinPermiso=true;rend
 async function addMov(p,data){
   const d={...data,creado:new Date().toISOString()};
   if(!S.db){toast(SIN_DB);return false}
-  try{await conTiempo(S.db.doc('finanzas/'+p).collection('movs').add(d));registrar(`Registró ${d.tipo==='ingreso'?'un ingreso':d.tipo==='ahorro'?'un ahorro':'un gasto'} de ${fmt(d.usd)} en ${PERF[p]}`);return true}
+  try{const nref=S.db.doc('finanzas/'+p).collection('movs').doc();await conTiempo(nref.set(d));registrar(p==='comun'?`Registró ${d.tipo==='ingreso'?'un aporte':'un gasto común'} de ${fmt(d.usd)}`:'Registró un movimiento en su perfil');return nref.id}
   catch(e){toast(trasError(e));render();return false}
 }
 async function delMov(p,id){
   if(!S.db){toast(SIN_DB);return}
   const mv=S.movs[p].find(x=>x.id===id);
-  try{await conTiempo(S.db.doc('finanzas/'+p).collection('movs').doc(id).delete());registrar(`Borró un movimiento${mv?' de '+fmt(mv.usd):''} en ${PERF[p]}`)}catch(e){toast(trasError(e))}
+  if(mv&&mv.compartido&&p===S.yo){try{await conTiempo(S.db.doc('compartidos/'+S.yo+'_'+id).delete())}catch(_){}}
+  try{await conTiempo(S.db.doc('finanzas/'+p).collection('movs').doc(id).delete());registrar(p==='comun'?`Borró un movimiento común${mv?' de '+fmt(mv.usd):''}`:'Borró un movimiento de su perfil')}catch(e){toast(trasError(e))}
 }
 async function saveCfg(p,cfg){
   if(!S.db){toast(SIN_DB);return false}
-  try{await conTiempo(S.db.doc('finanzas/'+p).set(cfg));registrar(`Cambió los pagos fijos de ${PERF[p]}`);return true}catch(e){toast(trasError(e));return false}
+  try{await conTiempo(S.db.doc('finanzas/'+p).set(cfg));registrar(p==='comun'?'Cambió los pagos fijos de Finanzas Familia':'Cambió los pagos fijos de su perfil');return true}catch(e){toast(trasError(e));return false}
 }
 let tasaTimer=null;
 function setTasa(v){
@@ -914,6 +931,7 @@ function formMov(tipo){
     ${tipo==='gasto'?`<div class="campo"><label for="mCat">Categoría</label><select id="mCat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select></div>`:'<div></div>'}</div>
     ${comun?`<div class="campo"><span class="lbl">${tipo==='ingreso'?'¿Quién aporta?':'¿Quién pagó?'}</span>${segMiembros('segQuien',S.yo||'adriana')}</div>`:''}
     <div class="campo"><label for="mNota">Nota (opcional)</label><input id="mNota" type="text" maxlength="80" placeholder="${tipo==='ingreso'?'Quincena, bono…':'Farmacia, panadería…'}"></div>
+    ${comun?'':`<label class="check"><input type="checkbox" id="mComp"> Mostrar este movimiento en Finanzas Familia</label>`}
     <div class="err" id="mErr"></div>
     <div class="hoja-pie"><button type="button" class="btn" data-h="cerrar">Cancelar</button><button class="btn btn-usd" type="submit">${tipo==='ingreso'?(comun?'Guardar aporte':'Guardar cobro'):'Guardar gasto'}</button></div>
   </form>`);
@@ -934,7 +952,9 @@ function formMov(tipo){
     if(sensible($('#mNota').value)){err.textContent=MSG_SENS;return}
     const data={tipo,fecha:fe,usd:r2(usd),moneda:mon,bs:bs?r2(bs):null,tasa:tasa||null,categoria:tipo==='gasto'?$('#mCat').value:'',nota:$('#mNota').value.trim()};
     if(comun)data.quien=quien;
+    const comp=!comun&&$('#mComp')&&$('#mComp').checked;
     const ok=await addMov(p,data);if(!ok)return;
+    if(comp&&typeof ok==='string')compartirMov(ok,{...data},true);
     cerrar();
     if(tipo==='ingreso'){
       const [y,m]=fe.split('-').map(Number);
@@ -994,7 +1014,7 @@ async function dbDel(path){
 const nota=(texto,autor)=>dbAdd('finanzas/comun/notas',{texto,autor:autor||S.yo,fecha:new Date().toISOString()});
 
 function yoHTML(){
-  return `<div class="yo">${avatar(S.yo||'')}<span>${S.yo?'Estás usando la app como':'¿Quién eres?'}</span><div class="seg" role="group" aria-label="Quién eres">${MIEMBROS.map(q=>`<button type="button" data-acc="yo" data-q="${q}" aria-pressed="${S.yo===q}">${PERF[q]}</button>`).join('')}</div></div>`;
+  return `<div class="yo">${avatar(S.yo||'')}<span>Estás en FinFam como <b>${PERF[S.yo]||''}</b>. Lo de tu perfil solo lo ves tú.</span></div>`;
 }
 function fondosHTML(){
   const vivos=S.fondos.filter(F=>F.estado==='propuesto'||F.estado==='activo').sort((a,b)=>(a.creado||'').localeCompare(b.creado||''));
@@ -1022,11 +1042,11 @@ function fondoHTML(F){
   }
   h+=`<div class="fondo-mes"><span class="fondo-mes-tit">Aportes de ${nomMes(S.y,S.m)}</span>`+MIEMBROS.filter(q=>num(aporte[q])>0||ap.some(x=>x.quien===q)).map(q=>{
     const t=sum(ap.filter(a=>a.quien===q&&a.mes===ymStr()),'usd'),c=num(aporte[q]),ok=c>0?t>=c-0.01:t>0;
-    return `<div class="fondo-p">${avatar(q)}<div class="fondo-p-txt"><b>${PERF[q]}</b><small>${fmt(t)} de ${fmt(c)}</small></div>${ok?`<span class="hecho">${ic('check')}Listo</span>`:`<button class="btn btn-sm btn-usd" data-acc="fondo-aportar" data-id="${F.id}" data-q="${q}">Aportar</button>`}</div>`;
+    return `<div class="fondo-p">${avatar(q)}<div class="fondo-p-txt"><b>${PERF[q]}</b><small>${fmt(t)} de ${fmt(c)}</small></div>${ok?`<span class="hecho">${ic('check')}Listo</span>`:q===S.yo?`<button class="btn btn-sm btn-usd" data-acc="fondo-aportar" data-id="${F.id}" data-q="${q}">Aportar</button>`:'<span class="ayuda">Pendiente</span>'}</div>`;
   }).join('')+`</div>`;
   if(ap.length){
     const lista=[...ap].sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||''));
-    h+=`<details class="fondo-hist" data-fid="${F.id}" ${S.histAb.has(F.id)?'open':''}><summary>${ic('clock')}<span>Historial de aportes (${ap.length})</span></summary><ul>${lista.map(a=>`<li>${avatar(a.quien)}<span class="fh-txt">${PERF[a.quien]}<small>${fecha(a.fecha).toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})}</small></span><b class="num">${fmt(a.usd)}</b><button class="btn-del" data-acc="fondo-borrar-aporte" data-id="${a.id}" aria-label="Borrar aporte">${ic('trash-2')}</button></li>`).join('')}</ul></details>`;
+    h+=`<details class="fondo-hist" data-fid="${F.id}" ${S.histAb.has(F.id)?'open':''}><summary>${ic('clock')}<span>Historial de aportes (${ap.length})</span></summary><ul>${lista.map(a=>`<li>${avatar(a.quien)}<span class="fh-txt">${PERF[a.quien]}<small>${fecha(a.fecha).toLocaleDateString('es',{day:'numeric',month:'short',year:'numeric'})}</small></span><b class="num">${fmt(a.usd)}</b>${a.quien===S.yo?`<button class="btn-del" data-acc="fondo-borrar-aporte" data-id="${a.id}" aria-label="Borrar aporte">${ic('trash-2')}</button>`:''}</li>`).join('')}</ul></details>`;
   }
   h+=`<div class="fondo-acc"><button class="btn-link" data-acc="fondo-editar" data-id="${F.id}">${ic('pencil')}Ajustar aportes</button><button class="btn-link peligro" data-acc="fondo-cerrar" data-id="${F.id}">${ic('archive')}Cerrar fondo</button></div>`;
   return h+`</div>`;
@@ -1099,12 +1119,12 @@ async function accionFamilia(a,b){
   if(a==='perfil'){formPerfil(b.dataset.q);return true}
   if(a==='proponer'){formFondo(null);return true}
   if(a==='fondo-editar'&&F){formFondo(F);return true}
-  if(a==='fondo-aportar'&&F){formAporte(F,b.dataset.q);return true}
+  if(a==='fondo-aportar'&&F){if(b.dataset.q!==S.yo){toast('Cada quien registra su propio aporte.');return true}formAporte(F,b.dataset.q);return true}
   if(a==='fondo-aceptar'&&F){if(await dbUpd('finanzas/comun/fondos/'+F.id,{estado:'activo',aceptadoPor:S.yo,inicio:HOY})){registrar(`Aceptó el fondo ${F.nombre}`);toast('¡Fondo activado!');nota(`Acepté el fondo ${F.nombre}. ¡A ahorrar juntos!`)}return true}
   if(a==='fondo-rechazar'&&F){if(await dbUpd('finanzas/comun/fondos/'+F.id,{estado:'rechazado'})){registrar(`Rechazó el fondo ${F.nombre}`);toast('Propuesta rechazada.');nota(`Por ahora no acepto el fondo ${F.nombre}. Hablemos de los montos.`)}return true}
   if(a==='fondo-cancelar'&&F){if(confirm('¿Retirar esta propuesta?'))await dbDel('finanzas/comun/fondos/'+F.id);return true}
   if(a==='fondo-cerrar'&&F){if(confirm(`¿Cerrar el fondo ${F.nombre}? Los aportes quedan registrados.`)){if(await dbUpd('finanzas/comun/fondos/'+F.id,{estado:'cerrado',cierre:HOY})&&(registrar(`Cerró el fondo ${F.nombre}`),S.yo))nota(`Cerré el fondo ${F.nombre}.`)}return true}
-  if(a==='fondo-borrar-aporte'){const A=S.apf.find(x=>x.id===b.dataset.id);if(A&&confirm('¿Borrar este aporte?')){if(await dbDel('finanzas/comun/aportesFondo/'+A.id)&&(registrar(`Borró un aporte de ${fmt(A.usd)} de ${PERF[A.quien]}`),A.movId))await dbDel('finanzas/'+A.quien+'/movs/'+A.movId)}return true}
+  if(a==='fondo-borrar-aporte'){const A=S.apf.find(x=>x.id===b.dataset.id);if(A&&A.quien!==S.yo){toast('Solo quien hizo el aporte puede borrarlo.')}else if(A&&confirm('¿Borrar este aporte?')){if(await dbDel('finanzas/comun/aportesFondo/'+A.id)&&(registrar(`Borró un aporte de ${fmt(A.usd)} de ${PERF[A.quien]}`),A.movId))await dbDel('finanzas/'+A.quien+'/movs/'+A.movId)}return true}
   if(a==='nota-borrar'){if(confirm('¿Borrar este comentario?')&&await dbDel('finanzas/comun/notas/'+b.dataset.id))registrar('Borró un comentario');return true}
   return false;
 }
@@ -1200,6 +1220,34 @@ function formPerfil(q){
   pintar();
 }
 
+/* ---------- compartir con la familia ---------- */
+async function compartirMov(id,mov,on){
+  if(!S.db||!S.yo||!mov){toast(SIN_DB);return}
+  const ref=S.db.doc('compartidos/'+S.yo+'_'+id),mref=S.db.doc('finanzas/'+S.yo+'/movs/'+id);
+  try{
+    if(on){await conTiempo(ref.set({quien:S.yo,tipo:mov.tipo,usd:r2(num(mov.usd)),moneda:mov.moneda||'USD',categoria:mov.categoria||'',nota:mov.nota||'',fecha:mov.fecha,mes:(mov.fecha||'').slice(0,7),creado:new Date().toISOString()}));
+      await conTiempo(mref.update({compartido:true}));toast('Ahora se ve en Finanzas Familia.')}
+    else{await conTiempo(ref.delete());await conTiempo(mref.update({compartido:false}));toast('Ya no se ve en Finanzas Familia.')}
+    registrar(on?'Compartió un movimiento con la familia':'Dejó de compartir un movimiento');
+  }catch(e){toast(trasError(e))}
+}
+function compartidosHTML(){
+  const k=ymStr(),lst=S.compartidos.filter(x=>x.mes===k).sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||(b.creado||'').localeCompare(a.creado||''));
+  let h=`<section>${titulo('share-2','Lo que cada uno comparte')}`;
+  if(!lst.length)return h+vacio('users',`Nadie ha compartido movimientos en ${nomMes(S.y,S.m)}. En tu perfil, toca el ícono de familia junto a un movimiento para mostrarlo aquí.`)+`</section>`;
+  const quienes=MIEMBROS.filter(q=>lst.some(x=>x.quien===q));
+  h+=`<div class="panel comp"><div class="comp-resumen">${quienes.map(q=>{const m=lst.filter(x=>x.quien===q);
+      const ing=sum(m.filter(x=>x.tipo==='ingreso'),'usd'),gas=sum(m.filter(x=>x.tipo==='gasto'),'usd'),aho=sum(m.filter(x=>x.tipo==='ahorro'),'usd');
+      return `<div class="comp-p">${avatar(q)}<div><b>${PERF[q]}</b><small>${[ing?'ingresos '+fmt(ing):'',gas?'gastos '+fmt(gas):'',aho?'ahorro '+fmt(aho):''].filter(Boolean).join(', ')}</small></div></div>`}).join('')}</div>
+    <ul class="comp-lista">${lst.slice(0,40).map(x=>{
+      const titulo=x.tipo==='ingreso'?'Ingreso':x.tipo==='ahorro'?(x.categoria||'Ahorro'):(x.categoria||'Gasto');
+      const signo=x.tipo==='ingreso'?'+':x.tipo==='ahorro'?'':'−';
+      const b=x.tipo==='ingreso'?badge('','banknote','#5B46D6'):x.tipo==='ahorro'?badge('Ahorro'):badge(x.categoria);
+      const sub=[PERF[x.quien]||'',fecha(x.fecha).toLocaleDateString('es',{day:'numeric',month:'short'}),x.nota?esc(x.nota):''].filter(Boolean).join(', ');
+      return `<li class="mov mov-${x.tipo}">${b}<div><span class="mov-cat">${esc(titulo)}</span><span class="mov-sub">${sub}</span></div><div class="mov-der"><span class="num">${signo}${fmt(x.usd)}</span></div></li>`}).join('')}</ul></div></section>`;
+  return h;
+}
+
 /* ---------- configuración ---------- */
 let ED=null;
 function parseDias(s){
@@ -1292,6 +1340,7 @@ app.addEventListener('click',async e=>{
   else if(a==='config')abrirConfig();
   else if(a==='pagar')pagar(b);
   else if(a==='deshacer'){if(confirm('¿Deshacer este registro?'))delMov(p,b.dataset.id)}
+  else if(a==='compartir'){const mv=S.movs[p].find(x=>x.id===b.dataset.id);if(mv)compartirMov(mv.id,mv,!mv.compartido)}
   else if(a==='borrar'){if(confirm('¿Borrar este movimiento?'))delMov(p,b.dataset.id)}
   else if(await accionFamilia(a,b)){}
   else if(a==='extra'){const mto=r2(num(b.dataset.monto));if(await addMov(p,{tipo:'ahorro',fecha:HOY,usd:mto,moneda:'USD',bs:null,tasa:null,categoria:'Ahorro extra',nota:''}))toast(`${fmt(mto)} pasados a ahorro extra.`)}
@@ -1373,6 +1422,12 @@ async function formSeguridad(){
       <div class="err" id="sErr"></div>
       <div class="seg-btns"><button type="button" class="btn btn-usd" data-s="activar">Activar bloqueo</button></div>`}
     </div>
+    <div class="seg-sec"><h3>${ic('key-round')} Mi código personal</h3>
+      <p class="ayuda">Cámbialo para que solo tú lo sepas. Mínimo 6 caracteres. Tus otros teléfonos ya conectados seguirán funcionando.</p>
+      <div class="dos"><div class="campo"><label for="cpNew">Código nuevo</label><input id="cpNew" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false"></div>
+      <div class="campo"><label for="cpNew2">Repite el código</label><input id="cpNew2" type="password" autocomplete="new-password" autocapitalize="none" spellcheck="false"></div></div>
+      <div class="err" id="cpErr"></div>
+      <div class="seg-btns"><button type="button" class="btn" data-s="codigo">Cambiar mi código</button></div></div>
     <div class="seg-sec"><h3>${ic('eye-off')} Modo discreto</h3>
       <label class="check"><input type="checkbox" id="sDisc" ${S.discreto?'checked':''}> Ocultar los montos en pantalla, para usar FinFam en público sin que otros vean tus cifras. También lo activas con el ojo de arriba.</label></div>
     <div class="seg-sec"><h3>${ic('history')} Actividad reciente</h3><ul class="actividad" id="sActList"><li class="ayuda">Cargando…</li></ul>
@@ -1409,6 +1464,10 @@ async function formSeguridad(){
     try{await S.db.doc('data/users/'+S.uid+'/seguridad').delete();lsSet(PIN_FLAG,null);registrar('Quitó su bloqueo con PIN');cerrar();toast('Bloqueo con PIN desactivado.')}catch(e){err().textContent=errTxt(e)}};
   const bB=hoja.querySelector('[data-s="bloquear"]');if(bB)bB.onclick=()=>bloquear();
   hoja.querySelector('[data-s="exportar"]').onclick=()=>exportarRespaldo();
+  const bCod=hoja.querySelector('[data-s="codigo"]');if(bCod)bCod.onclick=async()=>{const n=$('#cpNew').value.normalize('NFC').replace(/[\u2010-\u2015\u2212]/g,'-').trim(),n2=$('#cpNew2').value.normalize('NFC').replace(/[\u2010-\u2015\u2212]/g,'-').trim(),er=$('#cpErr');
+    if(n.length<6){er.textContent='El código debe tener al menos 6 caracteres.';return}if(n!==n2){er.textContent='Los dos códigos no coinciden.';return}
+    if(!S.db||!S.yo){er.textContent='Primero conéctate.';return}
+    try{await conTiempo(S.db.doc('config/acceso').update({[S.yo]:n}));registrar('Cambió su código personal');cerrar();toast('Código personal actualizado. Anótalo en un lugar seguro.')}catch(e){er.textContent=e&&e.code==='permission-denied'?'No se pudo cambiar. Revisa que las reglas nuevas estén publicadas.':trasError(e)}};
   const fi=$('#sImp');fi.onchange=()=>{if(fi.files&&fi.files[0])importarRespaldo(fi.files[0])};
   hoja.querySelector('[data-s="salir"]').onclick=async()=>{if(confirm('¿Desconectar este teléfono de FinFam?')){cerrar();await S.cerrarSesion()}};
   // actividad
@@ -1430,7 +1489,7 @@ async function exportarRespaldo(){
   const leerCol=async c=>{const s=await S.db.collection(c).get();s.docs.forEach(d=>{docs[c+'/'+d.id]=d.data()})};
   try{
     await leerDoc('finanzas/ajustes');
-    for(const p of Object.keys(PERF)){await leerDoc('finanzas/'+p);await leerCol('finanzas/'+p+'/movs')}
+    for(const p of [S.yo,'comun']){await leerDoc('finanzas/'+p);await leerCol('finanzas/'+p+'/movs')}
     for(const c of ['notas','fondos','aportesFondo','actividad'])await leerCol('finanzas/comun/'+c);
     await leerCol('perfiles');
   }catch(e){toast('No se pudo leer todo para el respaldo.');return}
@@ -1443,7 +1502,8 @@ async function importarRespaldo(file){
   if(!S.db){toast('Inicia sesión primero.');return}
   let j;try{j=JSON.parse(await file.text())}catch(_){toast('Ese archivo no es un respaldo de FinFam.');return}
   if(!j||j.app!=='FinFam'||typeof j.docs!=='object'){toast('Ese archivo no es un respaldo de FinFam.');return}
-  const ent=Object.entries(j.docs).filter(([p,d])=>RUTAS_OK(p)&&d&&typeof d==='object'&&!Array.isArray(d));
+  const propio=p=>p==='finanzas/ajustes'||p.startsWith('finanzas/comun')||p==='finanzas/'+S.yo||p.startsWith('finanzas/'+S.yo+'/')||p==='perfiles/comun'||p==='perfiles/'+S.yo;
+  const ent=Object.entries(j.docs).filter(([p,d])=>RUTAS_OK(p)&&propio(p)&&d&&typeof d==='object'&&!Array.isArray(d));
   if(!ent.length){toast('El respaldo está vacío.');return}
   if(!confirm(`Se cargarán ${ent.length} registros y reemplazarán los que tengan el mismo nombre. ¿Continuar?`))return;
   try{for(let i=0;i<ent.length;i+=400){const b=S.db.batch();ent.slice(i,i+400).forEach(([p,d])=>b.set(S.db.doc(p),d));await b.commit()}
@@ -1452,7 +1512,7 @@ async function importarRespaldo(file){
 }
 
 /* ---------- conexión ---------- */
-S.yo=leerYo();
+S.yo=null;
 aplicarDiscreto();
 $('#btnDiscreto').onclick=()=>{S.discreto=!S.discreto;lsSet(DISC_KEY,S.discreto?'1':null);aplicarDiscreto()};
 $('#btnSeg').onclick=()=>formSeguridad();
@@ -1475,29 +1535,33 @@ if(S.bloqueado)pintarCandado();
     S.bloqueado=false;$('#candado').hidden=true;
     mostrar(`<form class="candado-box" id="fCod" novalidate>
       ${logo?`<img src="${logo}" alt="" class="candado-logo">`:''}
-      <h2>Bienvenido a FinFam</h2><p>Escribe el código familiar que te dio Adriana. Solo lo pedimos una vez en este teléfono.</p>
-      <div class="campo"><label for="cdTxt">Código familiar</label><input id="cdTxt" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required></div>
+      <h2>Bienvenido a FinFam</h2><p>Elige quién eres y escribe tu código personal. Solo lo pedimos una vez en este teléfono.</p>
+      <div class="campo"><span class="lbl">¿Quién eres?</span><div class="seg seg-wrap" role="group" id="cdQuien">${MIEMBROS.map(q=>`<button type="button" data-q="${q}" aria-pressed="false">${PERF[q]}</button>`).join('')}</div></div>
+      <div class="campo"><label for="cdTxt">Tu código personal</label><input id="cdTxt" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" required></div>
       <label class="check"><input type="checkbox" id="cdVer"> Mostrar el código</label>
       <div class="err" id="cdErr">${esc(msg)}</div>
       <button class="btn btn-usd" type="submit">Entrar</button>
     </form>`);
+    let quien=null;
+    lg.querySelectorAll('#cdQuien [data-q]').forEach(b=>b.onclick=()=>{quien=b.dataset.q;lg.querySelectorAll('#cdQuien [data-q]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)))});
     $('#cdVer').onchange=e=>{$('#cdTxt').type=e.target.checked?'text':'password'};
     $('#fCod').onsubmit=async e=>{
       e.preventDefault();const err=$('#cdErr'),b=e.target.querySelector('[type=submit]'),codigo=$('#cdTxt').value.normalize('NFC').replace(/[\u2010-\u2015\u2212]/g,'-').replace(/\s+/g,' ').trim();
       if(esperaCod>Date.now()){err.textContent=`Demasiados intentos. Espera ${Math.ceil((esperaCod-Date.now())/1000)} segundos.`;return}
-      if(!codigo){err.textContent='Escribe el código familiar.';return}
+      if(!quien){err.textContent='Primero elige quién eres.';return}
+      if(!codigo){err.textContent='Escribe tu código personal.';return}
       b.disabled=true;err.textContent='';entrando=true;
       try{
         await listoAuth;
         if(!auth.currentUser)await auth.signInAnonymously();
         await auth.currentUser.getIdToken(true);
         let ok=false,ultimo=null;
-        for(let i=0;i<3&&!ok;i++){try{await db.doc('miembros/'+auth.currentUser.uid).set({codigo,creado:new Date().toISOString()});ok=true}catch(x){ultimo=x;if(x&&x.code==='permission-denied'&&i<2){await new Promise(r=>setTimeout(r,800));await auth.currentUser.getIdToken(true)}else break}}
+        for(let i=0;i<3&&!ok;i++){try{await db.doc('miembros/'+auth.currentUser.uid).set({perfil:quien,codigo,creado:new Date().toISOString()});ok=true}catch(x){ultimo=x;if(x&&x.code==='permission-denied'&&i<2){await new Promise(r=>setTimeout(r,800));await auth.currentUser.getIdToken(true)}else break}}
         if(!ok)throw ultimo;
-        fallosCod=0;entrando=false;conectar(auth.currentUser);
+        fallosCod=0;entrando=false;conectar(auth.currentUser,quien);
       }catch(er){
         entrando=false;b.disabled=false;
-        if(er&&er.code==='permission-denied'){fallosCod++;if(fallosCod>=5){esperaCod=Date.now()+60000;fallosCod=0}err.textContent='Ese código no es correcto.'}
+        if(er&&er.code==='permission-denied'){fallosCod++;if(fallosCod>=5){esperaCod=Date.now()+60000;fallosCod=0}err.textContent=`Ese no es el código de ${PERF[quien]}.`}
         else if(er&&er.code==='auth/operation-not-allowed')err.textContent='Falta activar el acceso anónimo en Firebase (ver LEEME.md).';
         else err.textContent='Sin conexión. Revisa tu internet e inténtalo de nuevo.';
       }
@@ -1505,10 +1569,10 @@ if(S.bloqueado)pintarCandado();
     const i=$('#cdTxt');if(i)i.focus();
   }
   S.cerrarSesion=async()=>{const u=auth.currentUser;try{if(u&&u.isAnonymous)await u.delete()}catch(_){}try{await auth.signOut()}catch(_){}};
-  function limpiar(){subs.forEach(f=>{try{f()}catch(_){}});subs=[];S.db=null;S.uid=null;
-    for(const p of Object.keys(PERF)){S.cfg[p]=null;S.movs[p]=[]}S.notas=[];S.fondos=[];S.apf=[];S.perfiles={};S.actividad=[];render()}
-  function conectar(u){
-    conectadoUid=u.uid;
+  function limpiar(){subs.forEach(f=>{try{f()}catch(_){}});subs=[];S.db=null;S.uid=null;S.yo=null;
+    for(const p of Object.keys(PERF)){S.cfg[p]=null;S.movs[p]=[]}S.notas=[];S.fondos=[];S.apf=[];S.compartidos=[];S.perfiles={};S.actividad=[];render()}
+  function conectar(u,perfil){
+    conectadoUid=u.uid;S.yo=perfil;S.vista=perfil;
     lg.hidden=true;lg.innerHTML='';
     S.db=db;S.uid=u.uid;S.email='';S.sinGuardar=false;S.sinPermiso=false;
     const fallo=e=>{if(e&&e.code==='permission-denied'){S.sinPermiso=true;render()}};
@@ -1519,11 +1583,12 @@ if(S.bloqueado)pintarCandado();
       else{lsSet(PIN_FLAG,null);if(S.bloqueado)desbloquear()}
     },()=>{S.segListo=true;if(S.bloqueado&&!S.seg){lsSet(PIN_FLAG,null);desbloquear()}});
     on(db.doc('finanzas/ajustes'),s=>{const d=s.exists?s.data():null;if(d&&num(d.tasa)>0)S.tasa=num(d.tasa);render()});
-    for(const p of Object.keys(PERF)){
+    for(const p of [perfil,'comun']){
       on(db.doc('finanzas/'+p),s=>{S.cfg[p]=s.exists?s.data():null;render()});
       on(db.doc('finanzas/'+p).collection('movs'),s=>{S.movs[p]=s.docs.map(d=>({id:d.id,...d.data()}));render()});
     }
     const lista=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+    on(db.collection('compartidos'),s=>{S.compartidos=lista(s);render()});
     on(db.collection('finanzas/comun/notas'),s=>{S.notas=lista(s);render()});
     on(db.collection('finanzas/comun/fondos'),s=>{S.fondos=lista(s);render()});
     on(db.collection('finanzas/comun/aportesFondo'),s=>{S.apf=lista(s);render()});
@@ -1538,7 +1603,7 @@ if(S.bloqueado)pintarCandado();
     limpiar();conectadoUid=null;
     if(!u){pantallaCodigo();return}
     for(let i=0;i<3;i++){
-      try{await u.getIdToken();const m=await db.doc('miembros/'+u.uid).get();if(m.exists){conectar(u);return}break}
+      try{await u.getIdToken();const m=await db.doc('miembros/'+u.uid).get();const pf=m.exists&&m.data().perfil;if(pf&&MIEMBROS.includes(pf)){conectar(u,pf);return}if(m.exists){pantallaCodigo('Ahora cada persona entra con su propio código. Elige quién eres y escríbelo.');return}break}
       catch(_){await new Promise(r=>setTimeout(r,700))}
     }
     pantallaCodigo();
